@@ -4,6 +4,9 @@
 #  - Quiet.
 #  - Git effort. (Separate script? Facilitate changing back at merge time.)
 #  - --dryrun
+#  - If a package is derived, it does not need to be cloned
+#  - Cloning packages too fast will overwhelm the proxy. Should insert
+#    wait after each package to allow source services to run.
 
 # Usage: massbranch <obs> <src prj> <dst prj> --change-git <giturl> <branch>] [--disable] [pkg...]
 
