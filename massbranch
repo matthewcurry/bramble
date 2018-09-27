@@ -1,0 +1,187 @@
+#!/bin/bash
+
+# TODO:
+#  - Quiet.
+#  - Git effort. (Separate script? Facilitate changing back at merge time.)
+#  - --dryrun
+
+# Usage: massbranch <obs> <src prj> <dst prj> --change-git <giturl> <branch>] [--disable] [pkg...]
+
+# obs: The address of the obs server to operate on
+#
+# src_prj: The project that contains the package you wish to copy.
+#
+# dst_prj: The project that you wish to contain the new package.
+#
+# --change-git: Allows the _service file in the project to be updated
+#   with a new git repository.
+#
+# --disable: This tool disables the build until all branching has been
+#   completed; however, by default, the build will be re-enabled at
+#   the end of branching. This flag leaves the project's build
+#   disabled.
+#
+# pkg: A list of packages that are to be branched. If empty, all
+# packages within the project will be branched.
+
+#
+# To disable a build:
+# osc api -X POST "/source/PROJECT/PACKAGE?cmd=set_flag&flag=build&status=disable"
+# to enable a build:
+# osc api -X POST "/source/PROJECT/PACKAGE?cmd=remove_flag&flag=build"
+
+
+# First thing is get a list of packages. If it doesn't work, helpfully
+# suggest proxy and no_proxy.
+
+# osc -A https://atse-obs-server
+
+print_usage() {
+    
+    echo "Usage: $(basename "$0") <obs> <src prj> <dst prj> "
+    echo "       [--disable] [pkg...]"
+    echo "Include --help as an option to see this message."
+    echo
+    echo "obs: The address of the obs server to target"
+    echo
+    echo "src_prj: The project that contains the package to branch"
+    echo
+    echo "dst_prj: The project that you wish to contain the new package."
+    echo "  It need not exist."
+    echo
+    echo "--disable-project: This tool disables the build until all branching"
+    echo "  has been completed; however, by default, the build will be "
+    echo "  re-enabled at the end of branching. This flag leaves the project's"
+    echo "  build disabled."
+#
+# pkg...: A list of packages that are to be branched. If empty, all
+# packages within the project will be branched.
+}
+
+parse_args() {
+    if [ "$#" == "0" ]; then
+	print_usage
+	exit
+    fi
+
+    POSITIONAL=()
+
+    changegit=0
+    disable_project=0
+    giturl=""
+    gitbranch=""
+
+    while [[ $# -gt 0 ]]; do
+	arg="$1"
+	case $arg in
+	    --help|-h)
+		print_usage
+		exit
+		;;
+	    --change-git)
+		shift
+		giturl=$1
+		shift
+		gitbranch=$1
+		shift
+		changegit=1
+		;;
+	    --disable-project)
+		shift
+		disable_project=1
+		;;
+	    --*)
+		echo "Unrecognized argument: $arg"
+		print_usage
+		exit
+		;;
+	    *)
+		POSITIONAL+=("$1")
+		shift
+		;;
+	esac
+    done
+
+    if [[ ${#POSITIONAL[@]} -lt 3 ]]; then
+	echo "Incorrect positional arguments."
+	print_usage
+	exit
+    else
+	obs_server=$POSITIONAL
+	POSITIONAL=("${POSITIONAL[@]:1}")
+
+	src_proj=$POSITIONAL
+	POSITIONAL=("${POSITIONAL[@]:1}")
+
+	dst_proj=$POSITIONAL
+	POSITIONAL=("${POSITIONAL[@]:1}")
+
+	if [[ ${#POSITIONAL[@]} -eq 0 ]]; then
+	    # echo "Branching all packages"
+	    /bin/true
+	else
+	    pkg_list=${POSITIONAL[@]}
+	    # echo "Branching $pkg_list"
+	fi
+    fi
+
+    echo "Got the following:"
+    echo "obs_server=$obs_server"
+    echo "src_proj=$src_proj"
+    echo "dst_proj=$dst_proj"
+    #echo "changegit=${changegit}"
+    #if [[ $changegit -ne 0 ]]; then
+	#echo "   URL:    $giturl"
+	#echo "   branch: $gitbranch"
+    #fi
+    if [[ $disable_project -eq 0 ]]; then
+	echo "Build is not disabled."
+    else
+	echo "Build is disabled."
+    fi
+}
+
+set_full_pkg_list() {
+    full_pkg_list="$(osc -A ${obs_server} ls ${src_proj})"
+    if [ "$?" != "0" ]; then
+	echo "$full_pkg_list"
+	echo "Unable to obtain package list from server. Check your "
+	echo "server's address, user credentials, permissions, and "
+	echo "proxy configuration (including no_proxy)".
+	exit
+    fi
+}
+
+branch_pkgs() {
+    local first_run=1
+    for pkg in $pkg_list; do
+	osc -A ${obs_server} branch ${src_proj} ${pkg} ${dst_proj}
+	if [[ $first_run -eq 1 ]]; then
+	    first_run=0
+	    osc -A ${obs_server} api -X POST "/source/${dst_proj}?cmd=set_flag&flag=build&status=disable"
+	fi
+    done
+}
+
+enable_build() {
+    osc -A ${obs_server} api -X POST "/source/${dst_proj}?cmd=remove_flag&flag=build"
+}
+
+parse_args "$@"
+
+set_full_pkg_list
+if [[ "${pkg_list}" == "" ]]; then
+    pkg_list=${full_pkg_list}
+fi
+
+branch_pkgs
+
+update_git
+
+if [[ $disable_project -eq 0 ]]; then
+    enable_build
+else
+    echo "Note: Building for this project has been disabled. Re-enable in the project's meta section on the web GUI, or run the following command:"
+    echo
+    echo "   osc -A ${obs_server} api -X POST \"/source/${dst_proj}?cmd=remove_flag&flag=build\""
+fi
