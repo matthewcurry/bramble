@@ -148,8 +148,6 @@ fi
 
 branch_pkgs
 
-update_git
-
 if [[ $disable_project -eq 0 ]]; then
     enable_build
 else
