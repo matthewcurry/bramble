@@ -8,41 +8,10 @@
 #  - Cloning packages too fast will overwhelm the proxy. Should insert
 #    wait after each package to allow source services to run.
 
-# Usage: massbranch <obs> <src prj> <dst prj> --change-git <giturl> <branch>] [--disable] [pkg...]
-
-# obs: The address of the obs server to operate on
-#
-# src_prj: The project that contains the package you wish to copy.
-#
-# dst_prj: The project that you wish to contain the new package.
-#
-# --change-git: Allows the _service file in the project to be updated
-#   with a new git repository.
-#
-# --disable: This tool disables the build until all branching has been
-#   completed; however, by default, the build will be re-enabled at
-#   the end of branching. This flag leaves the project's build
-#   disabled.
-#
-# pkg: A list of packages that are to be branched. If empty, all
-# packages within the project will be branched.
-
-#
-# To disable a build:
-# osc api -X POST "/source/PROJECT/PACKAGE?cmd=set_flag&flag=build&status=disable"
-# to enable a build:
-# osc api -X POST "/source/PROJECT/PACKAGE?cmd=remove_flag&flag=build"
-
-
-# First thing is get a list of packages. If it doesn't work, helpfully
-# suggest proxy and no_proxy.
-
-# osc -A https://atse-obs-server
 
 print_usage() {
-    
-    echo "Usage: $(basename "$0") <obs> <src prj> <dst prj> "
-    echo "       [--disable] [pkg...]"
+    echo "Usage: $(basename "$0") <obs> <src prj> <dst prj>" \
+	"[--disable-project] [pkg...]"
     echo "Include --help as an option to see this message."
     echo
     echo "obs: The address of the obs server to target"
@@ -56,9 +25,9 @@ print_usage() {
     echo "  has been completed; however, by default, the build will be "
     echo "  re-enabled at the end of branching. This flag leaves the project's"
     echo "  build disabled."
-#
-# pkg...: A list of packages that are to be branched. If empty, all
-# packages within the project will be branched.
+    echo
+    echo "pkg...: A list of packages that are to be branched. If empty, all"
+    echo "  packages within the project will be branched."
 }
 
 parse_args() {
